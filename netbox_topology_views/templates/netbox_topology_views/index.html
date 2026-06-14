@@ -1,0 +1,177 @@
+{% extends 'generic/_base.html' %}
+{% load buttons %}
+{% load render_table from django_tables2 %}
+{% load static %}
+{% load perms %}
+{% load helpers %}
+
+{% block title %}Topology Views{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="{% static 'netbox_topology_views/css/vendor.css' %}">
+<link rel="stylesheet" href="{% static 'netbox_topology_views/css/app.css' %}">
+{% endblock %} 
+
+{% block controls %}
+  <div class="controls">
+    	<div class="control-group">
+			{% block extra_controls %}{% endblock %}
+			<a id="btnDownloadXml" class="btn btn-info" href="#">
+				<i class="mdi mdi-download"></i>
+				Download XML
+			</a>
+			<a id="btnDownloadImage" class="btn btn-info" href="#">
+				<i class="mdi mdi-download"></i>
+				Download PNG
+			</a>
+    	</div>
+	</div>
+{% endblock controls %}
+
+{% block tabs %}
+	<ul class="nav nav-tabs" id="tabswrapper">
+    	{% block tab_items %}
+		<li class="nav-item" role="presentation">
+			<button class="nav-link active" id="network-tab" data-bs-toggle="tab" data-bs-target="#networks" type="button" role="tab" aria-controls="filters-form" aria-selected="true">
+			  Network
+			</button>
+		</li>
+		{% if filter_form %}
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="filters-form-tab" data-bs-toggle="tab" data-bs-target="#filters-form" type="button" role="tab" aria-controls="object-list" aria-selected="false">
+            Filters
+            {% if filter_form %}{% badge filter_form.changed_data|length bg_color="blue" %}{% endif %}
+          </button>
+        </li>
+      	{% endif %}
+		{% endblock tab_items %}
+	</ul>
+{% endblock tabs %}
+
+{% block content %}
+  {% with config=settings.PLUGINS_CONFIG.netbox_topology_views %}
+    <div class="tab-content" id="tabcontentwrapper">
+
+      {# Applied filters #}
+      {% if filter_form %}
+        <div id="filterwrapper">
+          {% applied_filters model filter_form request.GET %}
+        </div>
+      {% endif %}
+
+      <div class="tab-pane show active" id="networks" role="tabpanel" aria-labelledby="network-tab">
+        <div class="panel-body">
+          {% if filter_required %}
+            <div class="bg-warning text-white p-2">Nothing to display! Set filters and hit search button or set "Draw Default Layout" in your individual options.</div>
+          {% endif %}
+          {% if empty_result %}
+            <div class="bg-warning text-white p-2">Empty result set! Please review your filter settings.</div>
+            <div class="bg-info text-white p-2">Hint: Some options may produce an empty result. Use at least "Show Unconnected/Cables/Logical Connections".</div>
+          {% endif %}
+          <div id="visgraph"></div>
+        </div>
+      </div>
+
+      {% if filter_form %}
+      <div class="tab-pane show" id="filters-form" role="tabpanel" aria-labelledby="filters-form-tab">
+        {% include 'inc/filter_list.html' %}
+      </div>
+      {% endif %}
+
+      <!-- Zabbix Link Graph Modal (managed by zabbix_traffic.js) -->
+      <div class="modal fade" id="zabbixLinkModal" tabindex="-1" aria-labelledby="zabbixLinkModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+          <div class="modal-content" style="background-color: #fff; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: none;">
+            <div class="modal-header" style="border-bottom: 1px solid #eee; padding: 15px 20px; display: block;">
+              <div class="d-flex justify-content-between align-items-center">
+                <h5 class="modal-title" id="zabbixLinkModalLabel" style="font-weight: 600; color: #333; margin-bottom: 0;">Link Traffic</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+              </div>
+              <div style="font-size: 12px; color: #666; margin-top: 8px;">
+                <span class="badge bg-info text-dark" style="margin-right: 5px;">Data Source</span>
+                <span id="modal-data-source" style="font-family: monospace;">--</span>
+              </div>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+              <div id="modal-loading" class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">Fetching Zabbix data...</p>
+              </div>
+              <div id="modal-chart-container" class="d-none">
+                <div class="row mb-4 text-center">
+                  <div class="col-6">
+                    <h6 style="color: #2ecc71; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; font-size: 11px;">Inbound (Received)</h6>
+                    <div style="font-size: 26px; font-weight: bold; color: #2ecc71; line-height: 1.2;">
+                      <span id="modal-in-last">--</span>
+                      <span style="font-size: 16px; opacity: 0.8;">(<span id="modal-in-util">--</span>)</span>
+                    </div>
+                    <div style="font-size: 11px; color: #888; margin-top: 5px;">
+                      Avg: <span id="modal-in-avg" style="font-weight: 600;">--</span> | Max: <span id="modal-in-max" style="font-weight: 600;">--</span>
+                    </div>
+                  </div>
+                  <div class="col-6" style="border-left: 1px solid #eee;">
+                    <h6 style="color: #ffa500; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; font-size: 11px;">Outbound (Sent)</h6>
+                    <div style="font-size: 26px; font-weight: bold; color: #ffa500; line-height: 1.2;">
+                      <span id="modal-out-last">--</span>
+                      <span style="font-size: 16px; opacity: 0.8;">(<span id="modal-out-util">--</span>)</span>
+                    </div>
+                    <div style="font-size: 11px; color: #888; margin-top: 5px;">
+                      Avg: <span id="modal-out-avg" style="font-weight: 600;">--</span> | Max: <span id="modal-out-max" style="font-weight: 600;">--</span>
+                    </div>
+                  </div>
+                </div>
+                <h6 style="font-size: 12px; color: #555; margin-bottom: 10px; font-weight: bold;">Latest Traffic Graph (2 Hours)</h6>
+                <div style="height: 280px; width: 100%;">
+                  <canvas id="modalTrafficChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  {% endwith %}
+{% endblock content %}
+
+{% block javascript %}
+  <script type="text/javascript">
+    const brokenImage = '{{ broken_image }}';
+    const topologyData = {{ topology_data | safe }};
+    const basePath = '{{ basepath }}';
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    function resizeCanvas() {
+      heightToSubtract = getElementHeight('.page-header') +
+        getElementHeight('#tabswrapper') +
+        getElementHeight('#filterwrapper') +
+        getElementHeight('.footer') +
+        getElementPadding('#tabcontentwrapper');
+
+      document.getElementById("visgraph").style.height = "calc(100vh - " + heightToSubtract + "px)";
+    }
+
+    function getElementPadding(element) {
+      el = document.querySelector(element);
+      els = getComputedStyle(el);
+      padding = parseInt(els.paddingTop) + parseInt(els.paddingBottom);
+
+      return padding;
+    }
+
+    function getElementHeight(element) {
+      el = document.querySelector(element);
+      els = getComputedStyle(el);
+      height = el.offsetHeight + parseInt(els.marginTop) + parseInt(els.marginBottom);
+
+      return height;
+    }
+</script>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+	<script src="{% static 'netbox_topology_views/js/app.js' %}" defer></script>
+	<script src="{% static 'netbox_topology_views/js/zabbix_traffic.js' %}" defer></script>
+{% endblock javascript %}

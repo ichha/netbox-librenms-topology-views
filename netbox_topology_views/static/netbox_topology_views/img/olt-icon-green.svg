@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect x="14" y="28" width="100" height="56" rx="6" ry="6" fill="#2E7D32" stroke="#1B5E20" stroke-width="3"/>
+  <rect x="22" y="38" width="84" height="8" fill="#A5D6A7"/>
+  <circle cx="30" cy="62" r="4" fill="#ffffff"/>
+  <circle cx="44" cy="62" r="4" fill="#ffffff"/>
+  <circle cx="58" cy="62" r="4" fill="#ffffff"/>
+  <circle cx="72" cy="62" r="4" fill="#ffffff"/>
+  <circle cx="86" cy="62" r="4" fill="#ffffff"/>
+  <circle cx="100" cy="62" r="4" fill="#ffffff"/>
+  <line x1="64" y1="84" x2="64" y2="102" stroke="#1B5E20" stroke-width="4"/>
+  <circle cx="64" cy="110" r="8" fill="#2E7D32" stroke="#1B5E20" stroke-width="2"/>
+  <line x1="64" y1="102" x2="36" y2="118" stroke="#1B5E20" stroke-width="3"/>
+  <line x1="64" y1="102" x2="92" y2="118" stroke="#1B5E20" stroke-width="3"/>
+  <circle cx="36" cy="118" r="5" fill="#2E7D32" stroke="#1B5E20" stroke-width="2"/>
+  <circle cx="92" cy="118" r="5" fill="#2E7D32" stroke="#1B5E20" stroke-width="2"/>
+  <text x="64" y="22" text-anchor="middle" font-family="Arial" font-size="14" font-weight="bold">OLT</text>
+</svg>

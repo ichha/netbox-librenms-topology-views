@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Main OLT Body -->
+  <rect x="20" y="40" width="216" height="160" rx="12" ry="12"
+        fill="#1b3a1b" stroke="#0d1f0d" stroke-width="4"/>
+
+  <!-- Top Panel -->
+  <rect x="30" y="50" width="196" height="35" rx="6"
+        fill="#2d5a2d"/>
+
+  <!-- Ports -->
+  <g>
+    <rect x="45" y="105" width="20" height="14" fill="#8cff66" stroke="#0d1f0d"/>
+    <rect x="75" y="105" width="20" height="14" fill="#8cff66" stroke="#0d1f0d"/>
+    <rect x="105" y="105" width="20" height="14" fill="#8cff66" stroke="#0d1f0d"/>
+    <rect x="135" y="105" width="20" height="14" fill="#8cff66" stroke="#0d1f0d"/>
+    <rect x="165" y="105" width="20" height="14" fill="#8cff66" stroke="#0d1f0d"/>
+    <rect x="195" y="105" width="20" height="14" fill="#8cff66" stroke="#0d1f0d"/>
+  </g>
+
+  <!-- Status LEDs -->
+  <circle cx="55" cy="145" r="6" fill="#00ff66"/>
+  <circle cx="85" cy="145" r="6" fill="#00ff66"/>
+  <circle cx="115" cy="145" r="6" fill="#00ff66"/>
+  <circle cx="145" cy="145" r="6" fill="#00ff66"/>
+  <circle cx="175" cy="145" r="6" fill="#00ff66"/>
+  <circle cx="205" cy="145" r="6" fill="#00ff66"/>
+
+  <!-- Fiber Curve -->
+  <path d="M40 185 Q128 130 216 185"
+        stroke="#66ff99"
+        stroke-width="4"
+        fill="none"/>
+
+  <!-- Rack Ears -->
+  <rect x="10" y="70" width="10" height="100" fill="#102810"/>
+  <rect x="236" y="70" width="10" height="100" fill="#102810"/>
+
+</svg>
