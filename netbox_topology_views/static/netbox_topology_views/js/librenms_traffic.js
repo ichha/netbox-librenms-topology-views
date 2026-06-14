@@ -155,7 +155,7 @@
         var imgUrl = '/api/plugins/librenms-traffic/traffic-data/' +
             '?device=' + encodeURIComponent(edge.cable_a_dev_name) +
             '&interface=' + encodeURIComponent(edge.cable_a_name) +
-            '&range=1d&width=570&height=220';
+            '&range=1d&width=820&height=350';
         
         var div = document.createElement('div');
         div.className = 'librenms-traffic-tooltip';
@@ -199,7 +199,7 @@
             // Graph section
             '<div style="padding:10px 14px 8px; background:#f8fafc; border-top:1px solid #d0d5dd;">' +
                 '<div style="font-size:12px; font-weight:800; color:#000; margin-bottom:6px;">📈 Traffic Graph (Last 24 Hours)</div>' +
-                '<div style="width:100%; max-width:570px; height:220px; overflow:hidden; border:1px solid #e0e0e0; border-radius:4px; background:#fff;">' +
+                '<div style="width:100%; max-width:820px; height:350px; overflow:hidden; border:1px solid #e0e0e0; border-radius:4px; background:#fff;">' +
                     '<img src="' + imgUrl + '" style="width:100%; height:100%; object-fit:fill; display:block;" />' +
                 '</div>' +
             '</div>' +
@@ -425,7 +425,7 @@
             '  color: #000000 !important;' +
             '  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;' +
             '  font-size: 13px !important;' +
-            '  max-width: 600px !important;' +
+            '  max-width: 850px !important;' +
             '  overflow: visible !important;' +
             '  pointer-events: none !important;' +
             '}' +
