@@ -1,5 +1,5 @@
 /**
- * Zabbix Traffic Overlay for NetBox Topology Views
+ * LibreNMS Traffic Overlay for NetBox Topology Views
  * 
  * Standalone script — no bundling required.
  * Hooks into window.graph and window.edges exposed by app.js.
@@ -12,35 +12,37 @@
     let _retries = 0;
     const MAX_RETRIES = 60; // 30 seconds max
     let clickTimeout = null;
+    let activeEdge = null;
+    let activeRange = '1d';
 
     function waitForGraph() {
         if (window.graph && window.edges) {
             _graph = window.graph;
             _edges = window.edges;
-            console.log('[ZabbixTraffic] graph and edges ready. Initializing overlay.');
+            console.log('[LibreNMSTraffic] graph and edges ready. Initializing overlay.');
             init();
         } else {
             _retries++;
             if (_retries > MAX_RETRIES) {
-                console.warn('[ZabbixTraffic] Timed out waiting for window.graph / window.edges');
+                console.warn('[LibreNMSTraffic] Timed out waiting for window.graph / window.edges');
                 return;
             }
             setTimeout(waitForGraph, 500);
         }
     }
 
-    function injectZabbixModal() {
-        var existing = document.getElementById('zabbixLinkModal');
+    function injectLibreNMSModal() {
+        var existing = document.getElementById('librenmsLinkModal');
         if (existing) {
             existing.remove(); // Force refresh template if already injected by a previous script version
         }
         var html = `
-            <div class="modal fade" id="zabbixLinkModal" tabindex="-1" aria-labelledby="zabbixLinkModalLabel" aria-hidden="true">
-              <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal fade" id="librenmsLinkModal" tabindex="-1" aria-labelledby="librenmsLinkModalLabel" aria-hidden="true">
+              <div class="modal-dialog modal-xl modal-dialog-centered">
                 <div class="modal-content" style="background-color: #fff; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); border: none;">
                   <div class="modal-header" style="border-bottom: 1px solid #eee; padding: 15px 20px; display: block;">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="modal-title" id="zabbixLinkModalLabel" style="font-weight: 600; color: #333; margin-bottom: 0;">Link Traffic</h5>
+                        <h5 class="modal-title" id="librenmsLinkModalLabel" style="font-weight: 600; color: #333; margin-bottom: 0;">Link Traffic</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div style="font-size: 12px; color: #666; margin-top: 8px;">
@@ -53,7 +55,7 @@
                       <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
                       </div>
-                      <p class="mt-2 text-muted">Fetching Zabbix data...</p>
+                      <p class="mt-2 text-muted">Fetching LibreNMS data...</p>
                     </div>
                     <div id="modal-chart-container" class="d-none">
                       <div class="row mb-4 text-center">
@@ -63,9 +65,6 @@
                             <span id="modal-in-last">--</span> 
                             <span style="font-size: 16px; opacity: 0.8;">(<span id="modal-in-util">--</span>)</span>
                           </div>
-                          <div style="font-size: 11px; color: #888; margin-top: 5px;">
-                            Avg: <span id="modal-in-avg" style="font-weight: 600;">--</span> | Max: <span id="modal-in-max" style="font-weight: 600;">--</span>
-                          </div>
                         </div>
                         <div class="col-6" style="border-left: 1px solid #eee;">
                           <h6 style="color: #ffa500; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; font-size: 11px;">Outbound (Sent)</h6>
@@ -73,14 +72,23 @@
                             <span id="modal-out-last">--</span> 
                             <span style="font-size: 16px; opacity: 0.8;">(<span id="modal-out-util">--</span>)</span>
                           </div>
-                          <div style="font-size: 11px; color: #888; margin-top: 5px;">
-                            Avg: <span id="modal-out-avg" style="font-weight: 600;">--</span> | Max: <span id="modal-out-max" style="font-weight: 600;">--</span>
-                          </div>
                         </div>
                       </div>
-                      <h6 style="font-size: 12px; color: #555; margin-bottom: 10px; font-weight: bold;">Latest Traffic Graph (2 Hours)</h6>
-                      <div style="height: 280px; width: 100%;">
-                        <canvas id="modalTrafficChart"></canvas>
+                      
+                      <!-- Range buttons for modal graph -->
+                      <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 style="font-size: 12px; color: #555; margin-bottom: 0; font-weight: bold;">Traffic Graph</h6>
+                        <div class="btn-group" role="group" id="modal-range-buttons">
+                          <button type="button" class="btn btn-outline-secondary btn-sm active" data-range="1d">24 Hours</button>
+                          <button type="button" class="btn btn-outline-secondary btn-sm" data-range="2d">48 Hours</button>
+                          <button type="button" class="btn btn-outline-secondary btn-sm" data-range="7d">7 Days</button>
+                          <button type="button" class="btn btn-outline-secondary btn-sm" data-range="30d">30 Days</button>
+                          <button type="button" class="btn btn-outline-secondary btn-sm" data-range="1y">1 Year</button>
+                        </div>
+                      </div>
+                      
+                      <div class="librenms-modal-graph-wrapper" style="width: 100%; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.25s ease;">
+                        <img id="modalTrafficImg" src="" style="width: 100%; display: block; max-height: 500px; object-fit: contain;" />
                       </div>
                     </div>
                   </div>
@@ -118,87 +126,10 @@
         return '#ff0000';                   // 85-100% Red
     }
 
-    // We now draw labels manually via afterDrawing, so native labels are cleared
     function clearNativeLabel(edge) {
         if (edge.label !== '') {
             _edges.update({ id: edge.id, label: '' });
         }
-    }
-
-    function buildSvgSparkline(inHistory, outHistory, width, height) {
-        if ((!inHistory || inHistory.length < 2) && (!outHistory || outHistory.length < 2)) {
-            return '<div style="text-align:center; color:#000; padding:15px; font-size:12px;">No history data available</div>';
-        }
-
-        var allValues = [];
-        (inHistory || []).forEach(function(p) { allValues.push(p.y); });
-        (outHistory || []).forEach(function(p) { allValues.push(p.y); });
-        
-        var maxVal = Math.max.apply(null, allValues) || 1;
-        var leftPad = 45; // room for Y-axis labels
-        var rightPad = 8;
-        var topPad = 8;
-        var bottomPad = 30; // room for time labels + legend
-        var chartW = width - leftPad - rightPad;
-        var chartH = height - topPad - bottomPad;
-
-        function buildPath(history, color, fillColor) {
-            if (!history || history.length < 2) return '';
-            var points = [];
-            for (var i = 0; i < history.length; i++) {
-                var x = leftPad + (i / (history.length - 1)) * chartW;
-                var y = topPad + chartH - (history[i].y / maxVal) * chartH;
-                points.push(x.toFixed(1) + ',' + y.toFixed(1));
-            }
-            var line = '<polyline points="' + points.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round"/>';
-            // Fill area
-            var firstX = leftPad.toFixed(1);
-            var lastX = (leftPad + chartW).toFixed(1);
-            var baseY = (topPad + chartH).toFixed(1);
-            var fillPoints = firstX + ',' + baseY + ' ' + points.join(' ') + ' ' + lastX + ',' + baseY;
-            var area = '<polygon points="' + fillPoints + '" fill="' + fillColor + '"/>';
-            return area + line;
-        }
-
-        // Grid lines and Y-axis labels
-        var gridAndLabels = '';
-        for (var i = 0; i <= 4; i++) {
-            var val = maxVal * (1 - i / 4);
-            var yPos = topPad + (i / 4) * chartH;
-            gridAndLabels += '<text x="' + (leftPad - 5) + '" y="' + yPos.toFixed(1) + '" font-size="9" fill="#000" font-weight="600" text-anchor="end" dominant-baseline="middle">' + formatBpsShort(val) + '</text>';
-            gridAndLabels += '<line x1="' + leftPad + '" y1="' + yPos.toFixed(1) + '" x2="' + (leftPad + chartW) + '" y2="' + yPos.toFixed(1) + '" stroke="#ddd" stroke-width="0.5" stroke-dasharray="3,3"/>';
-        }
-        // Axis lines
-        gridAndLabels += '<line x1="' + leftPad + '" y1="' + topPad + '" x2="' + leftPad + '" y2="' + (topPad + chartH) + '" stroke="#999" stroke-width="1"/>';
-        gridAndLabels += '<line x1="' + leftPad + '" y1="' + (topPad + chartH) + '" x2="' + (leftPad + chartW) + '" y2="' + (topPad + chartH) + '" stroke="#999" stroke-width="1"/>';
-
-        // Time labels
-        var timeLabels = '';
-        var primary = (inHistory && inHistory.length >= 2) ? inHistory : outHistory;
-        if (primary && primary.length >= 2) {
-            var numTimeLabels = Math.min(5, primary.length);
-            for (var t = 0; t < numTimeLabels; t++) {
-                var idx = Math.floor(t * (primary.length - 1) / (numTimeLabels - 1));
-                var timeStr = new Date(primary[idx].x).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12:false});
-                var tx = leftPad + (idx / (primary.length - 1)) * chartW;
-                timeLabels += '<text x="' + tx.toFixed(1) + '" y="' + (topPad + chartH + 14) + '" font-size="9" fill="#000" font-weight="500" text-anchor="middle">' + timeStr + '</text>';
-            }
-        }
-
-        var svg = '<svg width="' + width + '" height="' + height + '" xmlns="http://www.w3.org/2000/svg" style="display:block; background:#fff; border:1px solid #e0e0e0; border-radius:4px;">';
-        svg += gridAndLabels;
-        svg += buildPath(inHistory, '#16a34a', 'rgba(22,163,74,0.2)');
-        svg += buildPath(outHistory, '#ea580c', 'rgba(234,88,12,0.2)');
-        svg += timeLabels;
-        // Legend at bottom
-        var legendY = height - 8;
-        var legendMidX = leftPad + chartW / 2;
-        svg += '<rect x="' + (legendMidX - 70) + '" y="' + (legendY - 8) + '" width="10" height="10" fill="#16a34a" rx="2"/>';
-        svg += '<text x="' + (legendMidX - 57) + '" y="' + legendY + '" font-size="10" fill="#000" font-weight="600">Inbound</text>';
-        svg += '<rect x="' + (legendMidX + 10) + '" y="' + (legendY - 8) + '" width="10" height="10" fill="#ea580c" rx="2"/>';
-        svg += '<text x="' + (legendMidX + 23) + '" y="' + legendY + '" font-size="10" fill="#000" font-weight="600">Outbound</text>';
-        svg += '</svg>';
-        return svg;
     }
 
     function buildTrafficTooltip(edge, data) {
@@ -221,30 +152,13 @@
         var percentIn = ((inLast / speedBps) * 100).toFixed(1);
         var percentOut = ((outLast / speedBps) * 100).toFixed(1);
 
-        // Build SVG sparkline from history
-        var inHistory = data.history ? data.history['in'] : [];
-        var outHistory = data.history ? data.history['out'] : [];
-        var sparklineSvg = buildSvgSparkline(inHistory, outHistory, 460, 160);
-
-        // Compute actual time range from history data
-        var graphLabel = 'Traffic Graph';
-        var historySource = (inHistory && inHistory.length >= 2) ? inHistory : outHistory;
-        if (historySource && historySource.length >= 2) {
-            var firstMs = new Date(historySource[0].x).getTime();
-            var lastMs = new Date(historySource[historySource.length - 1].x).getTime();
-            var diffHours = Math.round((lastMs - firstMs) / (1000 * 60 * 60));
-            if (diffHours >= 24) {
-                graphLabel = 'Traffic Graph (Last ' + Math.round(diffHours / 24) + ' Day' + (Math.round(diffHours / 24) > 1 ? 's' : '') + ')';
-            } else if (diffHours >= 1) {
-                graphLabel = 'Traffic Graph (Last ' + diffHours + ' Hour' + (diffHours > 1 ? 's' : '') + ')';
-            } else {
-                var diffMins = Math.round((lastMs - firstMs) / (1000 * 60));
-                graphLabel = 'Traffic Graph (Last ' + diffMins + ' Min)';
-            }
-        }
+        var imgUrl = '/api/plugins/librenms-traffic/traffic-data/' +
+            '?device=' + encodeURIComponent(edge.cable_a_dev_name) +
+            '&interface=' + encodeURIComponent(edge.cable_a_name) +
+            '&range=1d&width=570&height=220';
         
         var div = document.createElement('div');
-        div.className = 'zabbix-traffic-tooltip';
+        div.className = 'librenms-traffic-tooltip';
         div.innerHTML = 
             '<div style="background:#1e293b; color:#fff; padding:10px 14px; border-radius:6px 6px 0 0; font-weight:700; font-size:14px;">' +
                 devA + ' ⇄ ' + devB +
@@ -284,8 +198,10 @@
             '</div>' +
             // Graph section
             '<div style="padding:10px 14px 8px; background:#f8fafc; border-top:1px solid #d0d5dd;">' +
-                '<div style="font-size:12px; font-weight:800; color:#000; margin-bottom:6px;">📈 ' + graphLabel + '</div>' +
-                sparklineSvg +
+                '<div style="font-size:12px; font-weight:800; color:#000; margin-bottom:6px;">📈 Traffic Graph (Last 24 Hours)</div>' +
+                '<div style="width:100%; max-width:570px; height:220px; overflow:hidden; border:1px solid #e0e0e0; border-radius:4px; background:#fff;">' +
+                    '<img src="' + imgUrl + '" style="width:100%; height:100%; object-fit:fill; display:block;" />' +
+                '</div>' +
             '</div>' +
             // Footer
             '<div style="background:#eef2f7; padding:6px 14px; border-radius:0 0 6px 6px; font-size:10px; color:#000; text-align:center; border-top:1px solid #d0d5dd; font-weight:600;">' +
@@ -294,16 +210,16 @@
         return div;
     }
 
-    function fetchZabbixTrafficForEdges() {
+    function fetchLibreNMSTrafficForEdges() {
         _edges.forEach(function (edge) {
             if (edge.cable_a_name && edge.cable_a_dev_name &&
                 edge.cable_a_name !== 'device A name unknown' &&
                 edge.cable_a_dev_name !== 'device A name unknown') {
                 
-                var apiUrl = '/api/plugins/zabbix2-traffic/traffic-data/' +
+                var apiUrl = '/api/plugins/librenms-traffic/traffic-data/' +
                     '?device=' + encodeURIComponent(edge.cable_a_dev_name) +
                     '&interface=' + encodeURIComponent(edge.cable_a_name) +
-                    '&range=2h';
+                    '&format=json';
                     
                 fetch(apiUrl)
                     .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
@@ -320,7 +236,7 @@
                         var maxPercent = Math.max(percentIn, percentOut);
                         var maxColor = getTrafficColor(maxPercent);
 
-                        edge.zabbixTraffic = data;
+                        edge.librenmsTraffic = data;
                         clearNativeLabel(edge);
 
                         // Build rich HTML tooltip for hover
@@ -328,29 +244,28 @@
 
                         _edges.update({ 
                             id: edge.id, 
-                            zabbixTraffic: data,
+                            librenmsTraffic: data,
                             title: tooltipEl, // Update the HOVER tooltip with traffic data
                             label: '', // Clear native label
                             color: { color: maxColor, highlight: maxColor, hover: maxColor },
                             width: 3
                         });
                         
-                        console.log('[ZabbixTraffic] Updated tooltip for edge', edge.id, edge.cable_a_dev_name + ' [' + edge.cable_a_name + ']');
+                        console.log('[LibreNMSTraffic] Updated tooltip for edge', edge.id, edge.cable_a_dev_name + ' [' + edge.cable_a_name + ']');
                     })
                     .catch(function (err) {
-                        console.error('[ZabbixTraffic] fetch error for edge ' + edge.id + ':', err);
+                        console.error('[LibreNMSTraffic] fetch error for edge ' + edge.id + ':', err);
                     });
             }
         });
     }
 
-    var modalChartInstance = null;
-    function openZabbixModalForEdge(edge) {
-        var modalEl = document.getElementById('zabbixLinkModal');
+    function openLibreNMSModalForEdge(edge) {
+        var modalEl = document.getElementById('librenmsLinkModal');
         if (!modalEl) { 
             console.error('Modal element not found! Injecting dynamically...');
-            injectZabbixModal();
-            modalEl = document.getElementById('zabbixLinkModal');
+            injectLibreNMSModal();
+            modalEl = document.getElementById('librenmsLinkModal');
         }
         var modal = new bootstrap.Modal(modalEl);
         modal.show();
@@ -369,13 +284,13 @@
         var portB = edge.cable_b_name || 'port';
         
         // Show BOTH termination points in title
-        document.getElementById('zabbixLinkModalLabel').innerHTML =
+        document.getElementById('librenmsLinkModalLabel').innerHTML =
             devA + ' [' + portA + '] ⇄ ' + devB + ' [' + portB + '] <span class="badge bg-secondary ms-2">' + speedStr + '</span>';
             
         // Explicitly show the data source
         document.getElementById('modal-data-source').textContent = devA + ' [' + portA + ']';
 
-        var data = edge.zabbixTraffic;
+        var data = edge.librenmsTraffic;
         var inLast = data.stats['in'].last;
         var outLast = data.stats['out'].last;
         var speedBps = speedKbps ? speedKbps * 1000 : 10e9;
@@ -384,68 +299,48 @@
         var percentOut = ((outLast / speedBps) * 100).toFixed(1) + '%';
 
         document.getElementById('modal-in-last').textContent = formatBpsLong(inLast);
-        document.getElementById('modal-in-avg').textContent = formatBpsLong(data.stats['in'].avg);
-        document.getElementById('modal-in-max').textContent = formatBpsLong(data.stats['in'].max);
         document.getElementById('modal-in-util').textContent = percentIn;
         
         document.getElementById('modal-out-last').textContent = formatBpsLong(outLast);
-        document.getElementById('modal-out-avg').textContent = formatBpsLong(data.stats['out'].avg);
-        document.getElementById('modal-out-max').textContent = formatBpsLong(data.stats['out'].max);
         document.getElementById('modal-out-util').textContent = percentOut;
 
         loadingEl.classList.add('d-none');
         containerEl.classList.remove('d-none');
 
-        var ctx = document.getElementById('modalTrafficChart').getContext('2d');
-        if (modalChartInstance) { modalChartInstance.destroy(); }
-
-        var inHistory = data.history['in'] || [];
-        var outHistory = data.history['out'] || [];
-        var primary = inHistory.length >= outHistory.length ? inHistory : outHistory;
-
-        var labels = primary.map(function (item) {
-            var d = new Date(item.x);
-            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-        });
-
-        var inGrad = ctx.createLinearGradient(0, 0, 0, 250);
-        inGrad.addColorStop(0, 'rgba(46, 204, 113, 0.4)');
-        inGrad.addColorStop(1, 'rgba(46, 204, 113, 0.01)');
-        var outGrad = ctx.createLinearGradient(0, 0, 0, 250);
-        outGrad.addColorStop(0, 'rgba(241, 196, 15, 0.4)');
-        outGrad.addColorStop(1, 'rgba(241, 196, 15, 0.01)');
-
-        modalChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: 'Bits received (Inbound)',
-                        data: inHistory.map(function (i) { return i.y; }),
-                        borderColor: '#2ecc71', borderWidth: 2.2,
-                        backgroundColor: inGrad, fill: true,
-                        tension: 0.22, pointRadius: 0, pointHoverRadius: 5
-                    },
-                    {
-                        label: 'Bits sent (Outbound)',
-                        data: outHistory.map(function (i) { return i.y; }),
-                        borderColor: '#f1c40f', borderWidth: 2.2,
-                        backgroundColor: outGrad, fill: true,
-                        tension: 0.22, pointRadius: 0, pointHoverRadius: 5
-                    }
-                ]
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { ticks: { color: '#6c757d', font: { size: 10 }, autoSkip: true, autoSkipPadding: 30 } },
-                    y: { ticks: { color: '#6c757d', font: { size: 10 }, callback: function (v) { return formatBpsLong(v); } } }
-                }
+        // Reset active range button styling
+        var buttons = document.querySelectorAll('#modal-range-buttons button');
+        buttons.forEach(function(btn) {
+            if (btn.getAttribute('data-range') === '1d') {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
             }
         });
+
+        // Set active edge and load graph image
+        activeEdge = edge;
+        activeRange = '1d';
+        updateModalGraph();
+    }
+
+    function updateModalGraph() {
+        if (!activeEdge) return;
+        var modalImg = document.getElementById('modalTrafficImg');
+        if (!modalImg) return;
+
+        // Show a temporary loading placeholder style
+        modalImg.style.opacity = '0.5';
+
+        var imgUrl = '/api/plugins/librenms-traffic/traffic-data/' +
+            '?device=' + encodeURIComponent(activeEdge.cable_a_dev_name) +
+            '&interface=' + encodeURIComponent(activeEdge.cable_a_name) +
+            '&range=' + activeRange +
+            '&width=1350&height=480';
+
+        modalImg.src = imgUrl;
+        modalImg.onload = function() {
+            modalImg.style.opacity = '1.0';
+        };
     }
 
     function drawTrafficLabels(ctx) {
@@ -454,13 +349,13 @@
         var edgeIds = _edges.getIds();
         edgeIds.forEach(function (edgeId) {
             var edge = _edges.get(edgeId);
-            if (!edge || !edge.zabbixTraffic) return;
+            if (!edge || !edge.librenmsTraffic) return;
             
             var edgeObj = _graph.body.edges[edgeId];
             if (!edgeObj || !edgeObj.edgeType || !edgeObj.edgeType.getPoint) return;
             
-            var inStr = formatBpsShort(edge.zabbixTraffic.stats['in'].last);
-            var outStr = formatBpsShort(edge.zabbixTraffic.stats['out'].last);
+            var inStr = formatBpsShort(edge.librenmsTraffic.stats['in'].last);
+            var outStr = formatBpsShort(edge.librenmsTraffic.stats['out'].last);
 
             // Spaced a bit closer to the center: 33% and 67% along the cable curve
             var pos1 = 0.33;
@@ -506,7 +401,6 @@
 
                 // Text
                 ctx.fillStyle = '#333333';
-                // Adjusting vertical alignment slightly for smaller text
                 ctx.fillText(text, 0, 0.5); 
                 
                 ctx.restore();
@@ -531,29 +425,33 @@
             '  color: #000000 !important;' +
             '  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;' +
             '  font-size: 13px !important;' +
-            '  max-width: 520px !important;' +
+            '  max-width: 600px !important;' +
             '  overflow: visible !important;' +
             '  pointer-events: none !important;' +
             '}' +
             'div.vis-tooltip * {' +
             '  color: inherit;' +
             '}' +
-            'div.vis-tooltip .zabbix-traffic-tooltip {' +
+            'div.vis-tooltip .librenms-traffic-tooltip {' +
             '  color: #000000;' +
             '}' +
-            'div.vis-tooltip .zabbix-traffic-tooltip td,' +
-            'div.vis-tooltip .zabbix-traffic-tooltip div,' +
-            'div.vis-tooltip .zabbix-traffic-tooltip span,' +
-            'div.vis-tooltip .zabbix-traffic-tooltip b {' +
+            'div.vis-tooltip .librenms-traffic-tooltip td,' +
+            'div.vis-tooltip .librenms-traffic-tooltip div,' +
+            'div.vis-tooltip .librenms-traffic-tooltip span,' +
+            'div.vis-tooltip .librenms-traffic-tooltip b {' +
             '  color: inherit;' +
+            '}' +
+            '.librenms-modal-graph-wrapper:hover {' +
+            '  transform: scale(1.015);' +
+            '  box-shadow: 0 8px 25px rgba(0,0,0,0.1) !important;' +
             '}';
         document.head.appendChild(style);
-        console.log('[ZabbixTraffic] Tooltip CSS injected.');
+        console.log('[LibreNMSTraffic] Tooltip CSS injected.');
     }
 
     function init() {
         injectTooltipCSS();
-        injectZabbixModal();
+        injectLibreNMSModal();
 
         _graph.on('afterDrawing', function (ctx) {
             drawTrafficLabels(ctx);
@@ -563,10 +461,10 @@
             if (params.edges.length > 0 && params.nodes.length === 0) {
                 var edgeId = params.edges[0];
                 var clickedEdge = _edges.get(edgeId);
-                if (clickedEdge && clickedEdge.zabbixTraffic) {
+                if (clickedEdge && clickedEdge.librenmsTraffic) {
                     // Short delay to avoid intercepting double-clicks!
                     clickTimeout = setTimeout(function() {
-                        openZabbixModalForEdge(clickedEdge);
+                        openLibreNMSModalForEdge(clickedEdge);
                     }, 250);
                 }
             }
@@ -580,9 +478,20 @@
             }
         });
 
-        fetchZabbixTrafficForEdges();
-        setInterval(fetchZabbixTrafficForEdges, 60000);
-        console.log('[ZabbixTraffic] Overlay initialised — fetching traffic data...');
+        // Bind modal range button clicks
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.parentElement && e.target.parentElement.id === 'modal-range-buttons') {
+                var buttons = e.target.parentElement.querySelectorAll('button');
+                buttons.forEach(function(btn) { btn.classList.remove('active'); });
+                e.target.classList.add('active');
+                activeRange = e.target.getAttribute('data-range') || '1d';
+                updateModalGraph();
+            }
+        });
+
+        fetchLibreNMSTrafficForEdges();
+        setInterval(fetchLibreNMSTrafficForEdges, 60000);
+        console.log('[LibreNMSTraffic] Overlay initialised — fetching traffic data...');
     }
 
     waitForGraph();
