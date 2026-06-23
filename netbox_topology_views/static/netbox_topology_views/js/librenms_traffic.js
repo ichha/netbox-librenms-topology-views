@@ -152,7 +152,7 @@
         var percentIn = ((inLast / speedBps) * 100).toFixed(1);
         var percentOut = ((outLast / speedBps) * 100).toFixed(1);
 
-        var imgUrl = '/api/plugins/librenms-traffic/traffic-data/' +
+        var imgUrl = '/api/plugins/librenms/traffic-data/' +
             '?device=' + encodeURIComponent(edge.cable_a_dev_name) +
             '&interface=' + encodeURIComponent(edge.cable_a_name) +
             '&range=1d&width=820&height=350';
@@ -216,7 +216,7 @@
                 edge.cable_a_name !== 'device A name unknown' &&
                 edge.cable_a_dev_name !== 'device A name unknown') {
                 
-                var apiUrl = '/api/plugins/librenms-traffic/traffic-data/' +
+                var apiUrl = '/api/plugins/librenms/traffic-data/' +
                     '?device=' + encodeURIComponent(edge.cable_a_dev_name) +
                     '&interface=' + encodeURIComponent(edge.cable_a_name) +
                     '&format=json';
@@ -331,7 +331,7 @@
         // Show a temporary loading placeholder style
         modalImg.style.opacity = '0.5';
 
-        var imgUrl = '/api/plugins/librenms-traffic/traffic-data/' +
+        var imgUrl = '/api/plugins/librenms/traffic-data/' +
             '?device=' + encodeURIComponent(activeEdge.cable_a_dev_name) +
             '&interface=' + encodeURIComponent(activeEdge.cable_a_name) +
             '&range=' + activeRange +
