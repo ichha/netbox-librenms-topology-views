@@ -116,6 +116,7 @@
     }
 
     function getTrafficColor(percent) {
+        if (percent <= 0) return '#000000'; // 0%      Black
         if (percent < 1) return '#aaaaaa';  // 0-1%   Default Gray
         if (percent < 10) return '#8b00ff'; // 1-10%  Purple
         if (percent < 25) return '#0000ff'; // 10-25% Blue
